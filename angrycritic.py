@@ -1,6 +1,6 @@
 import openpyxl as Workbook
 import os
-from pymorphy2 import MorphAnalyzer
+from pymorphy3 import MorphAnalyzer
 import string
 from config import *
 import sys
