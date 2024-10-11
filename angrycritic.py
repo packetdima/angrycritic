@@ -1,4 +1,3 @@
-import openpyxl as Workbook
 import os
 import pandas as pd
 import numpy as np
@@ -17,7 +16,7 @@ def main():
         print("Файл обнаружен. Начинаем обработку...")
 
         df = pd.read_excel('data.xlsx', index_col=None, header=0)
-        new_df = df.assign(Lemma='', Type='', Type_Keywords='', Mood='', Mood_Keywords='', Index='', Test = '')
+        new_df = df.assign(Lemma='', Type='', Type_Keywords='', Mood='', Mood_Keywords='', Index='')
         arr = new_df.to_numpy()
 
         new_arr = []
