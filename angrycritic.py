@@ -1,256 +1,264 @@
+import yaml
+from yaml.loader import SafeLoader
 import os
 import pandas as pd
-import numpy as np
 from pymorphy3 import MorphAnalyzer
 import string
-from config import *
-import sys
 import time
 from tqdm import tqdm
 
-
 def main():
+    global skip
+    global types_keywords
+    global replace
     start_time = time.time()
+    active_types = []
 
-    if os.path.exists('data.xlsx') and os.path.exists('config.py'):
+    if os.path.exists('data.xlsx'):
         print("Файл обнаружен. Начинаем обработку...")
 
         df = pd.read_excel('data.xlsx', index_col=None, header=0)
         new_df = df.assign(Lemma='', Type='', Type_Keywords='', Mood='', Mood_Keywords='', Index='')
         arr = new_df.to_numpy()
 
-        new_arr = []
+        with open('./data/skip.yaml', encoding='utf8') as f:
+            skip = yaml.load(f, Loader=SafeLoader)
 
-        for item in tqdm(arr):
-            time.sleep(0.001)
-            prep = prepare(str(item[0]).lower())
-            lemtext = prep[0]
-            char = prep[1]
-            type_keywords = prep[2]
+        with open('./data/types.yaml', encoding='utf8') as f:
+            types_keywords = yaml.load(f, Loader=SafeLoader)
 
-            result = mood_define(lemtext, char)
-            i = result[0]
-            mood = result[1]
-            mood_keywords = result[2]
+        with open('./data/replace.yaml', encoding='utf8') as f:
+            replace = yaml.load(f, Loader=SafeLoader)
 
-            item[2] = lemtext
-            item[3] = char
-            item[4] = type_keywords
-            item[5] = mood
-            item[6] = mood_keywords
-            item[7] = i
-            new_arr.append(item)
-
-
-        resultdf = pd.DataFrame(new_arr)
-        resultdf.columns= ['Text', 'Answer', 'Lemma', 'Type', 'Type_Keywords', 'Mood', 'Mood_Keywords', 'Index']
-        resultdf.to_excel('data_done.xlsx')
-
-        end_time = time.time()  # время окончания выполнения
-        execution_time = end_time - start_time  # вычисляем время выполнения
-
-        print(f"Время выполнения программы: {execution_time} секунд")
-
-        print("Обработка выполнена! Проверьте файл data_done.xlsx")
-    else:
-        print("Файл с данными (data.xlsx) или config.py не найден. Пожалуйста проверьте их наличие в папке с программой!")
-
-def mood_define(lemtext, char):
-
-    index = 0
-    sum_words = ''
-    words = []
-    new_sum_words = []
-
-    if char != 'undef' and char != 'skip':
-        for key, value in keywords[char].items():
-            if key in lemtext:
-                words.append(key)
-                if sum_words == '':
-                    sum_words = key
-                else:
-                    sum_words += ', ' + key
+        for item in types_keywords:
+            if item != 'undef' and item != 'presence_kw':
+                active_types.append(item)
             else:
                 continue
-    elif char == 'undef' or char == 'skip':
-        index = 0
 
-    if len(words) == 1:
-        for word in words:
-            if keywords[char][word] == 'positive':
-                new_sum_words.append(word)
-                index += 1
-            elif keywords[char][word] == 'negative':
-                new_sum_words.append(word)
-                index -= 1
-            elif keywords[char][word][:4] == 'near':
-                for item in near[char]:
-                    if lemtext[lemtext.index(word) - 1] == item or \
-                            lemtext[lemtext.index(word) - 2] == item:
-                        if keywords[char][word][5:] == 'negative':
-                            new_sum_words.append(item + ' + ' + word)
-                            index -= 1
-                        elif keywords[char][word][5:] == 'positive':
-                            new_sum_words.append(item + ' + ' + word)
-                            index += 1
-                        else:
-                            index += 0
-                        break
-                    else:
-                        continue
-            elif keywords[char][word] == 'presence':
-                for key, value in presence[char].items():
-                    if key in lemtext:
-                        if value == 'negative':
-                            new_sum_words.append(word + ' + ' + key)
-                            index -= 1
-                        else:
-                            new_sum_words.append(word + ' + ' + key)
-                            index += 1
-                    continue
-            elif keywords[char][word] == 'together':
-                for item in near[char]:
-                    if lemtext[lemtext.index(word) - 1] == item or \
-                            lemtext[lemtext.index(word) - 2] == item:
-                        for key, value in presence[char].items():
-                            if key in lemtext:
-                                if value == 'negative':
-                                    new_sum_words.append(item + ' + ' + word + ' + ' + key)
-                                    index -= 1
-                                else:
-                                    new_sum_words.append(item + ' + ' + word + ' + ' + key)
-                                    index += 1
-                            continue
-            else:
-                index += 0
+        prep = prepare(arr)
+        prepdf = pd.DataFrame(prep)
+        prepdf.columns= ['Text', 'Answer', 'Lemma', 'Type', 'Type_Keywords', 'Mood', 'Mood_Keywords', 'Index']
+        filtred = prepdf.query("Type in ('skip', 'undef')").to_numpy()
+        df1 = pd.DataFrame(filtred)
 
-    elif len(words) > 1:
-        for word in words:
-            if keywords[char][word] == 'positive':
-                new_sum_words.append(word)
-                index += 1
-            elif keywords[char][word] == 'negative':
-                new_sum_words.append(word)
-                index -= 1
-            elif keywords[char][word][:4] == 'near':
-                for item in near[char]:
-                    if lemtext[lemtext.index(word) - 1] == item or \
-                            lemtext[lemtext.index(word) - 2] == item:
-                        if keywords[char][word][5:] == 'negative':
-                            new_sum_words.append(item + ' + ' + word)
-                            index -= 1
-                            break
-                        elif keywords[char][word][5:] == 'positive':
-                            new_sum_words.append(item + ' + ' + word)
-                            index += 1
-                            break
-                        else:
-                            index += 0
-                            break
-                    else:
-                        continue
-            elif keywords[char][word] == 'presence':
-                for key, value in presence[char].items():
-                    if key in lemtext:
-                        if value == 'negative':
-                            new_sum_words.append(word + ' + ' + key)
-                            index -= 1
-                        else:
-                            new_sum_words.append(word + ' + ' + key)
-                            index += 1
-                    continue
-            elif keywords[char][word] == 'together':
-                for item in near[char]:
-                    if lemtext[lemtext.index(word) - 1] == item or \
-                            lemtext[lemtext.index(word) - 2] == item:
-                        for key, value in presence[char].items():
-                            if key in lemtext:
-                                if value == 'negative':
-                                    new_sum_words.append(item + ' + ' + word + ' + ' + key)
-                                    index -= 1
-                                else:
-                                    new_sum_words.append(item + ' + ' + word + ' + ' + key)
-                                    index += 1
-                            continue
-            else:
-                index += 0
+        frames = []
 
-    if index > 0:
-        mood = 'positive'
-    elif index < 0:
-        mood = 'negative'
+        for item in active_types:
+            val = str(item).lower()
+            df2 = prepdf.query("Type == @val")
+            arr2 = df2.to_numpy()
+            new_arr = mood_define(arr2, item)
+            mood_df = pd.DataFrame(new_arr)
+            frames.append(mood_df)
+
+        frames.append(df1)
+        result = pd.concat(frames)
+
+        result.columns= ['Text', 'Answer', 'Lemma', 'Type', 'Type_Keywords', 'Mood', 'Mood_Keywords', 'Index']
+        result.to_excel('data_done.xlsx')
+
+        end_time = time.time()
+        execution_time = end_time - start_time
+
+        print(f"Время выполнения программы: {execution_time} секунд")
+        print("Обработка выполнена! Проверьте файл data_done.xlsx")
     else:
-        mood = 'undef'
-    return index, mood, new_sum_words
+        print("Файл с данными (data.xlsx) не найден. Пожалуйста проверьте их наличие в папке с программой!")
 
 
-def prepare(text):
+def prepare(arr):
+    print('Начинаем предварительную обработку.')
+    array = arr
     morph = MorphAnalyzer()
-    tokens = []
-    skip_status = 0
-    char = ''
-    keyword = []
-    arr = []
-    new_text=''
 
-    spec_chars = string.punctuation + '\xa0«»\t—…'
-    text = str(text).replace('-', ' ')
-    text = str(text).replace('/', ' ')
-    text = str(text).replace('.', ' ')
-    text = str(text).replace(',', ' ')
+    for item in tqdm(array):
+        time.sleep(0.001)
+        tokens = []
+        keyword = []
+        type_arr = []
+        new_text = ''
+        char = ''
+        skip_status = 0
 
-    text = "".join([ch for ch in text if ch not in spec_chars])
+        spec_chars = string.punctuation + '\xa0«»\t—…'
+        text = str(item[0]).lower().replace('-', ' ')
+        text = str(item[0]).lower().replace('/', ' ')
+        text = str(item[0]).lower().replace('.', ' ')
+        text = str(item[0]).lower().replace(',', ' ')
 
-    for word in skip:
-        if word in str(text):
-            skip_status = 1
-            char = 'skip'
-            keyword.append(word)
-            break
-        else:
-            skip_status = 0
-            continue
-    if skip_status == 0:
-        for token in text.split():
-            token = token.strip()
-            token = morph.normal_forms(token)[0]
-            new_text += ' ' + token
-            tokens.append(token)
+        text = "".join([ch for ch in text if ch not in spec_chars])
 
-        for k, v in char_keywords.items():
-            if k in tokens:
-                if v == 'presence':
-                    for key, value in char_presence.items():
-                        if key in tokens:
-                            arr.append(value)
-                            keyword.append(k)
-                            keyword.append(key)
+        for word in skip:
+            if word in str(text):
+                skip_status = 1
+                char = 'skip'
+                keyword.append(word)
+                break
+            else:
+                skip_status = 0
+                continue
+        if skip_status == 0:
+            for token in text.split():
+                token = token.strip()
+                token = morph.normal_forms(token)[0]
+                new_text += ' ' + token
+                tokens.append(token)
+            for k, v in types_keywords.items():
+                if k != 'presence_kw':
+                    for i in v:
+                        if i in tokens:
+                            if k == 'undef':
+                                for key, value in types_keywords['presence_kw'].items():
+                                    for i in value:
+                                        if i in tokens:
+                                            type_arr.append(key)
+                                            keyword.append(i)
+                                    else:
+                                        continue
+                            else:
+                                type_arr.append(k)
+                                keyword.append(i)
+
+            if len(type_arr) > 0:
+                char = {i: type_arr.count(i) for i in type_arr};
+                char = list(char.keys())[0]
+            else:
+                char = 'undef'
+
+            if char != 'undef' and char != 'skip':
+                try:
+                    for key, value in replace['general'].items():
+                        if key in new_text:
+                            if value is None:
+                                new_text = new_text.replace(key,'')
+                            else:
+                                new_text = new_text.replace(key, value)
                         else:
                             continue
-                else:
-                    arr.append(v)
-                    keyword.append(k)
+                except KeyError:
+                    pass
 
-        if len(arr) > 0:
-            char = {i: arr.count(i) for i in arr};
-            char = list(char.keys())[0]
+                try:
+                    for key, value in replace[char].items():
+                        if key in new_text:
+                            if value is None:
+                                new_text = new_text.replace(key,'')
+                            else:
+                                new_text = new_text.replace(key, value)
+                        else:
+                            continue
+                except KeyError:
+                    pass
+
+        item[2] = tokens
+        item[3] = char
+        item[4] = keyword
+
+    print('Предварительная обработка завершена!')
+    return arr
+
+
+def mood_define(arr, char):
+    print('Начинаем процесс определения тональности - ' + char)
+    neg = []
+    pos = []
+    near_pos = []
+    near_neg = []
+    near_kw = []
+    presence_pos = []
+    presence_neg = []
+    presence_kw = []
+
+    path = './data/' + char + '.yaml'
+
+    with open(path, encoding='utf8') as f:
+        keywords = yaml.safe_load(f)
+
+    for key, value in keywords.items():         # собираем ключевые слова из yaml в переменные
+        if key == 'negative':
+            neg = value
+        elif key == 'positive':
+            pos = value
+        elif key == 'near':
+            for item in value:
+                for k, v in item.items():
+                    if v != 'None':
+                        if k == 'negative':
+                            near_neg = v
+                        elif k == 'positive':
+                            near_pos = v
+                        elif k == 'near_kw':
+                            near_kw = v
+        elif key == 'presence':
+            for item in value:
+                for k, v in item.items():
+                    if v != 'None':
+                        if k == 'negative':
+                            presence_neg = v
+                        elif k == 'positive':
+                            presence_pos = v
+        elif key == 'presence_kw':
+            presence_kw = value
+
+    for item in tqdm(arr):
+        index = 0
+        lemtext = item[2]
+        sum_words = []
+
+        for i in lemtext:
+            if i in neg:
+                sum_words.append(i)
+                index -= 1
+            elif i in pos:
+                sum_words.append(i)
+                index += 1
+            elif i in near_neg:
+                if lemtext[lemtext.index(i) - 1] in near_kw:
+                    sum_words.append(lemtext[lemtext.index(i) - 1] + ' + ' + i)
+                    index -= 1
+                elif lemtext[lemtext.index(i) - 2] in near_kw:
+                    sum_words.append(lemtext[lemtext.index(i) - 2] + ' + ' + i)
+                    index -= 1
+            elif i in near_pos:
+                if lemtext[lemtext.index(i) - 1] in near_kw:
+                    sum_words.append(lemtext[lemtext.index(i) - 1] + ' + ' + i)
+                    index += 1
+                elif lemtext[lemtext.index(i) - 2] in near_kw:
+                    sum_words.append(lemtext[lemtext.index(i) - 2] + ' + ' + i)
+                    index += 1
+            elif i in presence_kw:
+                if lemtext[lemtext.index(i) - 1] in near_kw:
+                    for word in presence_neg:
+                        if word in lemtext:
+                            sum_words.append(lemtext[lemtext.index(i) - 1] + ' + ' + i + ' + ' + word)
+                            index -= 1
+                    for word in presence_pos:
+                        if word in lemtext:
+                            sum_words.append(lemtext[lemtext.index(i) - 1] + ' + ' + i + ' + ' + word)
+                            index += 1
+                elif lemtext[lemtext.index(i) - 2] in near_kw:
+                    for word in presence_neg:
+                        if word in lemtext:
+                            sum_words.append(lemtext[lemtext.index(i) - 2] + ' + ' + i + ' + ' + word)
+                            index -= 1
+                    for word in presence_pos:
+                        if word in lemtext:
+                            sum_words.append(lemtext[lemtext.index(i) - 2] + ' + ' + i + ' + ' + word)
+                            index += 1
+
+        if index > 0:
+            mood = 'positive'
+        elif index < 0:
+            mood = 'negative'
         else:
-            char = 'undef'
+            mood = 'undef'
 
-        if char != 'undef' and char != 'skip':
-            for key, value in replace['general'].items():
-                if key in new_text:
-                    new_text = new_text.replace(key,value)
-                else:
-                    continue
-            for key, value in replace[char].items():
-                if key in new_text:
-                    new_text = new_text.replace(key,value)
-                else:
-                    continue
+        item[5] = mood
+        item[6] = sum_words
+        item[7] = index
 
-    return tokens, char, keyword
-
+    return arr
 
 if __name__ == '__main__':
     main()
