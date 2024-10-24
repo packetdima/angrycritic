@@ -170,7 +170,7 @@ def mood_define(arr, char):
     presence_neg = []
     presence_kw = []
 
-    path = './data/' + char + '.yaml'
+    path = './data/mood_keywords_' + char + '.yaml'
 
     with open(path, encoding='utf8') as f:
         keywords = yaml.safe_load(f)
