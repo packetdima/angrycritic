@@ -6,11 +6,16 @@ from pymorphy3 import MorphAnalyzer
 import string
 import time
 from tqdm import tqdm
+from nltk.corpus import stopwords
+from nltk.probability import FreqDist
+
 
 def main():
     global skip
     global types_keywords
     global replace
+    global rustopwords
+    rustopwords = stopwords.words('russian')
     start_time = time.time()
     active_types = []
 
@@ -37,26 +42,40 @@ def main():
                 continue
 
         prep = prepare(arr)
-        prepdf = pd.DataFrame(prep)
-        prepdf.columns= ['Text', 'Answer', 'Lemma', 'Type', 'Type_Keywords', 'Mood', 'Mood_Keywords', 'Index']
+        prepdf = pd.DataFrame(prep[0])
+        countdf = pd.DataFrame(prep[1]) #.from_dict(counter, orient='index')
+        prepdf.columns= ['Text1', 'Text2', 'Lemma', 'Type', 'Type_Keywords', 'Mood', 'Mood_Keywords', 'Index']
+        countdf.columns= ['Слово','Частота']
         filtred = prepdf.query("Type in ('skip', 'undef')").to_numpy()
         df1 = pd.DataFrame(filtred)
 
         frames = []
-
+        data = {}
+        writer = pd.ExcelWriter('data_done.xlsx', engine='xlsxwriter')
         for item in active_types:
             val = str(item).lower()
             df2 = prepdf.query("Type == @val")
             arr2 = df2.to_numpy()
             new_arr = mood_define(arr2, item)
-            mood_df = pd.DataFrame(new_arr)
+            mood_df = pd.DataFrame(new_arr[0])
             frames.append(mood_df)
+            if len(new_arr[1]) > 0:
+                data[item] = new_arr[1]
 
         frames.append(df1)
         result = pd.concat(frames)
 
-        result.columns= ['Text', 'Answer', 'Lemma', 'Type', 'Type_Keywords', 'Mood', 'Mood_Keywords', 'Index']
-        result.to_excel('data_done.xlsx')
+
+        result.columns= ['Text1', 'Text2', 'Lemma', 'Type', 'Type_Keywords', 'Mood', 'Mood_Keywords', 'Index']
+        result.to_excel(writer, sheet_name='Total', index=False)
+        countdf.to_excel(writer, sheet_name='Частотка по документу', index=False)
+
+        for k, v in data.items():
+            r = pd.DataFrame(v)
+            r.columns = ['Слово','Частота']
+            r.to_excel(writer, sheet_name=k, index=False)
+
+        writer.close()
 
         end_time = time.time()
         execution_time = end_time - start_time
@@ -71,6 +90,7 @@ def prepare(arr):
     print('Начинаем предварительную обработку.')
     array = arr
     morph = MorphAnalyzer()
+    textcount = []
 
     for item in tqdm(array):
         time.sleep(0.001)
@@ -86,7 +106,7 @@ def prepare(arr):
         text = str(item[0]).lower().replace('/', ' ')
         text = str(item[0]).lower().replace('.', ' ')
         text = str(item[0]).lower().replace(',', ' ')
-
+        text = str(item[0]).lower().replace('¶', ' ')
         text = "".join([ch for ch in text if ch not in spec_chars])
 
         for word in skip:
@@ -102,6 +122,9 @@ def prepare(arr):
             for token in text.split():
                 token = token.strip()
                 token = morph.normal_forms(token)[0]
+                if token and token not in rustopwords:
+                    if not token.isdigit():
+                        textcount.append(token)
                 new_text += ' ' + token
                 tokens.append(token)
             for k, v in types_keywords.items():
@@ -155,8 +178,10 @@ def prepare(arr):
         item[3] = char
         item[4] = keyword
 
+    fdist = FreqDist(textcount)
     print('Предварительная обработка завершена!')
-    return arr
+
+    return arr, fdist.most_common()
 
 
 def mood_define(arr, char):
@@ -169,6 +194,7 @@ def mood_define(arr, char):
     presence_pos = []
     presence_neg = []
     presence_kw = []
+    textcount = []
 
     path = './data/mood_keywords_' + char + '.yaml'
 
@@ -207,6 +233,9 @@ def mood_define(arr, char):
         sum_words = []
 
         for i in lemtext:
+            if i and i not in rustopwords:
+                if not i.isdigit():
+                    textcount.append(i)
             if i in neg:
                 sum_words.append(i)
                 index -= 1
@@ -258,7 +287,9 @@ def mood_define(arr, char):
         item[6] = sum_words
         item[7] = index
 
-    return arr
+    fdist = FreqDist(textcount)
+
+    return arr, fdist.most_common()
 
 if __name__ == '__main__':
     main()

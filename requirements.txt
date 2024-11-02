@@ -1,0 +1,8 @@
+yaml
+os
+pandas
+pymorph3
+string
+time
+tqdm
+nltk
