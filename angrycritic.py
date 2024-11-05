@@ -22,7 +22,7 @@ def main():
     if os.path.exists('data.xlsx'):
         print("Файл обнаружен. Начинаем обработку...")
 
-        df = pd.read_excel('data.xlsx', index_col=None, header=0)
+        df = pd.read_excel('data.xlsx', index_col=None, header=0, usecols='A')
         new_df = df.assign(Lemma='', Type='', Type_Keywords='', Mood='', Mood_Keywords='', Index='')
         arr = new_df.to_numpy()
 
@@ -44,7 +44,7 @@ def main():
         prep = prepare(arr)
         prepdf = pd.DataFrame(prep[0])
         countdf = pd.DataFrame(prep[1]) #.from_dict(counter, orient='index')
-        prepdf.columns= ['Text1', 'Text2', 'Lemma', 'Type', 'Type_Keywords', 'Mood', 'Mood_Keywords', 'Index']
+        prepdf.columns= ['Text1', 'Lemma', 'Type', 'Type_Keywords', 'Mood', 'Mood_Keywords', 'Index']
         countdf.columns= ['Слово','Частота']
         filtred = prepdf.query("Type in ('skip', 'undef')").to_numpy()
         df1 = pd.DataFrame(filtred)
@@ -66,7 +66,7 @@ def main():
         result = pd.concat(frames)
 
 
-        result.columns= ['Text1', 'Text2', 'Lemma', 'Type', 'Type_Keywords', 'Mood', 'Mood_Keywords', 'Index']
+        result.columns= ['Text1', 'Lemma', 'Type', 'Type_Keywords', 'Mood', 'Mood_Keywords', 'Index']
         result.to_excel(writer, sheet_name='Total', index=False)
         countdf.to_excel(writer, sheet_name='Частотка по документу', index=False)
 
@@ -174,9 +174,9 @@ def prepare(arr):
                 except KeyError:
                     pass
 
-        item[2] = tokens
-        item[3] = char
-        item[4] = keyword
+        item[1] = tokens
+        item[2] = char
+        item[3] = keyword
 
     fdist = FreqDist(textcount)
     print('Предварительная обработка завершена!')
@@ -229,7 +229,7 @@ def mood_define(arr, char):
 
     for item in tqdm(arr):
         index = 0
-        lemtext = item[2]
+        lemtext = item[1]
         sum_words = []
 
         for i in lemtext:
@@ -283,9 +283,9 @@ def mood_define(arr, char):
         else:
             mood = 'undef'
 
-        item[5] = mood
-        item[6] = sum_words
-        item[7] = index
+        item[4] = mood
+        item[5] = sum_words
+        item[6] = index
 
     fdist = FreqDist(textcount)
 
