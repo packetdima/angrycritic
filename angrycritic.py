@@ -44,7 +44,7 @@ def main():
         prep = prepare(arr)
         prepdf = pd.DataFrame(prep[0])
         countdf = pd.DataFrame(prep[1]) #.from_dict(counter, orient='index')
-        prepdf.columns= ['Text1', 'Lemma', 'Type', 'Type_Keywords', 'Mood', 'Mood_Keywords', 'Index']
+        prepdf.columns= ['Text', 'Lemma', 'Type', 'Type_Keywords', 'Mood', 'Mood_Keywords', 'Index']
         countdf.columns= ['Слово','Частота']
         filtred = prepdf.query("Type in ('skip', 'undef')").to_numpy()
         df1 = pd.DataFrame(filtred)
@@ -66,9 +66,9 @@ def main():
         result = pd.concat(frames)
 
 
-        result.columns= ['Text1', 'Lemma', 'Type', 'Type_Keywords', 'Mood', 'Mood_Keywords', 'Index']
+        result.columns= ['Text', 'Lemma', 'Type', 'Type_Keywords', 'Mood', 'Mood_Keywords', 'Index']
         result.to_excel(writer, sheet_name='Total', index=False)
-        countdf.to_excel(writer, sheet_name='Частотка по документу', index=False)
+        countdf.to_excel(writer, sheet_name='Частотность по документу', index=False)
 
         for k, v in data.items():
             r = pd.DataFrame(v)
