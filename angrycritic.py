@@ -8,6 +8,7 @@ import time
 from tqdm import tqdm
 from nltk.corpus import stopwords
 from nltk.probability import FreqDist
+import jarowinkler
 
 
 def main():
@@ -22,7 +23,7 @@ def main():
     if os.path.exists('data.xlsx'):
         print("Файл обнаружен. Начинаем обработку...")
 
-        df = pd.read_excel('data.xlsx', index_col=None, header=0, usecols='A')
+        df = pd.read_excel('data.xlsx', index_col=None, header=0)
         new_df = df.assign(Lemma='', Type='', Type_Keywords='', Mood='', Mood_Keywords='', Index='')
         arr = new_df.to_numpy()
 
@@ -43,9 +44,9 @@ def main():
 
         prep = prepare(arr)
         prepdf = pd.DataFrame(prep[0])
-        countdf = pd.DataFrame(prep[1]) #.from_dict(counter, orient='index')
+        countdf = pd.DataFrame(prep[1])
         prepdf.columns= ['Text', 'Lemma', 'Type', 'Type_Keywords', 'Mood', 'Mood_Keywords', 'Index']
-        countdf.columns= ['Слово','Частота']
+        countdf.columns= ['Слово', 'Частота']
         filtred = prepdf.query("Type in ('skip', 'undef')").to_numpy()
         df1 = pd.DataFrame(filtred)
 
@@ -65,14 +66,13 @@ def main():
         frames.append(df1)
         result = pd.concat(frames)
 
-
         result.columns= ['Text', 'Lemma', 'Type', 'Type_Keywords', 'Mood', 'Mood_Keywords', 'Index']
         result.to_excel(writer, sheet_name='Total', index=False)
-        countdf.to_excel(writer, sheet_name='Частотность по документу', index=False)
+        countdf.to_excel(writer, sheet_name='Частота по документу', index=False)
 
         for k, v in data.items():
             r = pd.DataFrame(v)
-            r.columns = ['Слово','Частота']
+            r.columns = ['Слово', 'Частота']
             r.to_excel(writer, sheet_name=k, index=False)
 
         writer.close()
@@ -127,21 +127,25 @@ def prepare(arr):
                         textcount.append(token)
                 new_text += ' ' + token
                 tokens.append(token)
+
             for k, v in types_keywords.items():
                 if k != 'presence_kw':
                     for i in v:
-                        if i in tokens:
-                            if k == 'undef':
-                                for key, value in types_keywords['presence_kw'].items():
-                                    for i in value:
-                                        if i in tokens:
-                                            type_arr.append(key)
-                                            keyword.append(i)
+                        for word in tokens:
+                            if len(word) > 2:
+                                simular = jarowinkler.jarowinkler_similarity(i, word)
+                                if simular >= 0.9:
+                                    if k == 'undef':
+                                        for key, value in types_keywords['presence_kw'].items():
+                                            for i in value:
+                                                if i in tokens:
+                                                    type_arr.append(key)
+                                                    keyword.append(i)
+                                            else:
+                                                continue
                                     else:
-                                        continue
-                            else:
-                                type_arr.append(k)
-                                keyword.append(i)
+                                        type_arr.append(k)
+                                        keyword.append(i)
 
             if len(type_arr) > 0:
                 char = {i: type_arr.count(i) for i in type_arr};
@@ -154,7 +158,7 @@ def prepare(arr):
                     for key, value in replace['general'].items():
                         if key in new_text:
                             if value is None:
-                                new_text = new_text.replace(key,'')
+                                new_text = new_text.replace(key, '')
                             else:
                                 new_text = new_text.replace(key, value)
                         else:
@@ -166,7 +170,7 @@ def prepare(arr):
                     for key, value in replace[char].items():
                         if key in new_text:
                             if value is None:
-                                new_text = new_text.replace(key,'')
+                                new_text = new_text.replace(key, '')
                             else:
                                 new_text = new_text.replace(key, value)
                         else:
@@ -185,7 +189,9 @@ def prepare(arr):
 
 
 def mood_define(arr, char):
+
     print('Начинаем процесс определения тональности - ' + char)
+
     neg = []
     pos = []
     near_pos = []
@@ -233,48 +239,65 @@ def mood_define(arr, char):
         sum_words = []
 
         for i in lemtext:
-            if i and i not in rustopwords:
-                if not i.isdigit():
-                    textcount.append(i)
-            if i in neg:
-                sum_words.append(i)
-                index -= 1
-            elif i in pos:
-                sum_words.append(i)
-                index += 1
-            elif i in near_neg:
-                if lemtext[lemtext.index(i) - 1] in near_kw:
-                    sum_words.append(lemtext[lemtext.index(i) - 1] + ' + ' + i)
-                    index -= 1
-                elif lemtext[lemtext.index(i) - 2] in near_kw:
-                    sum_words.append(lemtext[lemtext.index(i) - 2] + ' + ' + i)
-                    index -= 1
-            elif i in near_pos:
-                if lemtext[lemtext.index(i) - 1] in near_kw:
-                    sum_words.append(lemtext[lemtext.index(i) - 1] + ' + ' + i)
-                    index += 1
-                elif lemtext[lemtext.index(i) - 2] in near_kw:
-                    sum_words.append(lemtext[lemtext.index(i) - 2] + ' + ' + i)
-                    index += 1
-            elif i in presence_kw:
-                if lemtext[lemtext.index(i) - 1] in near_kw:
-                    for word in presence_neg:
-                        if word in lemtext:
-                            sum_words.append(lemtext[lemtext.index(i) - 1] + ' + ' + i + ' + ' + word)
-                            index -= 1
-                    for word in presence_pos:
-                        if word in lemtext:
-                            sum_words.append(lemtext[lemtext.index(i) - 1] + ' + ' + i + ' + ' + word)
-                            index += 1
-                elif lemtext[lemtext.index(i) - 2] in near_kw:
-                    for word in presence_neg:
-                        if word in lemtext:
-                            sum_words.append(lemtext[lemtext.index(i) - 2] + ' + ' + i + ' + ' + word)
-                            index -= 1
-                    for word in presence_pos:
-                        if word in lemtext:
-                            sum_words.append(lemtext[lemtext.index(i) - 2] + ' + ' + i + ' + ' + word)
-                            index += 1
+            if len(i) > 2:
+                if i and i not in rustopwords:
+                    if not i.isdigit():
+                        textcount.append(i)
+                for wrd in neg:
+                    simular = jarowinkler.jarowinkler_similarity(i, wrd)
+                    if simular >= 0.9:
+                        sum_words.append(i)
+                        index -= 1
+                for wrd in pos:
+                    simular = jarowinkler.jarowinkler_similarity(i, wrd)
+                    if simular >= 0.9:
+                        sum_words.append(i)
+                        index += 1
+                for wrd in near_neg:
+                    simular = jarowinkler.jarowinkler_similarity(i, wrd)
+                    if simular >= 0.9:
+                        if lemtext.index(i) > 1:
+                            if lemtext[lemtext.index(i) - 1] in near_kw:
+                                sum_words.append(lemtext[lemtext.index(i) - 1] + ' + ' + i)
+                                index -= 1
+                        elif lemtext.index(i) > 2:
+                            if lemtext[lemtext.index(i) - 2] in near_kw:
+                                sum_words.append(lemtext[lemtext.index(i) - 2] + ' + ' + i)
+                                index -= 1
+                for wrd in near_pos:
+                    simular = jarowinkler.jarowinkler_similarity(i, wrd)
+                    if simular >= 0.9:
+                        if lemtext.index(i) > 1:
+                            if lemtext[lemtext.index(i) - 1] in near_kw:
+                                sum_words.append(lemtext[lemtext.index(i) - 1] + ' + ' + i)
+                                index += 1
+                        elif lemtext.index(i) > 2:
+                            if lemtext[lemtext.index(i) - 2] in near_kw:
+                                sum_words.append(lemtext[lemtext.index(i) - 2] + ' + ' + i)
+                                index += 1
+                for wrd in presence_kw:
+                    simular = jarowinkler.jarowinkler_similarity(i, wrd)
+                    if simular >= 0.9:
+                        if lemtext.index(i) > 1:
+                            if lemtext[lemtext.index(i) - 1] in near_kw:
+                                for word in presence_neg:
+                                    if word in lemtext:
+                                        sum_words.append(lemtext[lemtext.index(i) - 1] + ' + ' + i + ' + ' + word)
+                                        index -= 1
+                                for word in presence_pos:
+                                    if word in lemtext:
+                                        sum_words.append(lemtext[lemtext.index(i) - 1] + ' + ' + i + ' + ' + word)
+                                        index += 1
+                        elif lemtext.index(i) > 2:
+                            if lemtext[lemtext.index(i) - 2] in near_kw:
+                                for word in presence_neg:
+                                    if word in lemtext:
+                                        sum_words.append(lemtext[lemtext.index(i) - 2] + ' + ' + i + ' + ' + word)
+                                        index -= 1
+                                for word in presence_pos:
+                                    if word in lemtext:
+                                        sum_words.append(lemtext[lemtext.index(i) - 2] + ' + ' + i + ' + ' + word)
+                                        index += 1
 
         if index > 0:
             mood = 'positive'
@@ -290,6 +313,7 @@ def mood_define(arr, char):
     fdist = FreqDist(textcount)
 
     return arr, fdist.most_common()
+
 
 if __name__ == '__main__':
     main()
