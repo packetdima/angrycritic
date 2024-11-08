@@ -6,3 +6,4 @@ string
 time
 tqdm
 nltk
+jarowinkler
