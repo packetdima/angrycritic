@@ -20,6 +20,7 @@ def main():
     start_time = time.time()
     active_types = []
 
+
     if os.path.exists('data.xlsx'):
         print("Файл обнаружен. Начинаем обработку...")
 
@@ -33,14 +34,14 @@ def main():
         with open('./data/types.yaml', encoding='utf8') as f:
             types_keywords = yaml.load(f, Loader=SafeLoader)
 
-        with open('./data/replace.yaml', encoding='utf8') as f:
-            replace = yaml.load(f, Loader=SafeLoader)
+        # with open('./data/replace.yaml', encoding='utf8') as f:
+        #     replace = yaml.load(f, Loader=SafeLoader)
 
         for item in types_keywords:
-            if item != 'undef' and item != 'presence_kw':
-                active_types.append(item)
-            else:
-                continue
+            # if item != 'undef' and item != 'presence_kw':
+            active_types.append(item)
+            # else:
+            #     continue
 
         prep = prepare(arr)
         prepdf = pd.DataFrame(prep[0])
@@ -87,7 +88,7 @@ def main():
 
 
 def prepare(arr):
-    print('Начинаем предварительную обработку.')
+    print('Начинаем предварительную обработку...')
     array = arr
     morph = MorphAnalyzer()
     textcount = []
@@ -129,54 +130,56 @@ def prepare(arr):
                 tokens.append(token)
 
             for k, v in types_keywords.items():
-                if k != 'presence_kw':
-                    for i in v:
-                        for word in tokens:
-                            if len(word) > 2:
+                for i in v:
+                    y = 0
+                    for word in tokens:
+                        if word is not None and len(word) > 2:
+                            if i.isalpha() == True:  # Тональность определяется по одному слову
                                 simular = jarowinkler.jarowinkler_similarity(i, word)
                                 if simular >= 0.9:
-                                    if k == 'undef':
-                                        for key, value in types_keywords['presence_kw'].items():
-                                            for i in value:
-                                                if i in tokens:
-                                                    type_arr.append(key)
-                                                    keyword.append(i)
-                                            else:
-                                                continue
-                                    else:
-                                        type_arr.append(k)
-                                        keyword.append(i)
+                                    type_arr.append(k)
+                                    keyword.append(i)
+                            else:
+                                kwrd = i.split('*')
+                                simular = jarowinkler.jarowinkler_similarity(word, kwrd[1])
+                                if simular >= 0.9:
+                                    if len(kwrd[0]) > 0 and kwrd[0][0] != '_' and len(kwrd[2]) == 0:  # Только near
+                                        result = check_near(tokens, y, kwrd[0])
+                                        if result[0] == True:
+                                            type_arr.append(k)
+                                            keyword.append(
+                                                str(result[1]).replace('"', '').replace('[', '').replace(']',
+                                                                                                         '').replace(
+                                                    '\\', '').replace("'", "") + ' *' + kwrd[1] + '*')
+
+                                    elif len(kwrd[0]) == 0 or kwrd[0][0] == '_' and len(kwrd[2]) > 0:  # Только presence
+                                        res = check_presence(tokens, kwrd[2])
+                                        if res[0] == True:
+
+                                            type_arr.append(k)
+                                            keyword.append(
+                                                '*' + kwrd[1] + '*' + str(res[1]).replace('"', '').replace('[', '').replace(
+                                                    ']', '').replace('\\', '').replace("'", ""))
+                                    elif len(kwrd[0]) > 0 and kwrd[0][0] != '_' and len(kwrd[2]) > 0:  # Near & Presence
+                                        result = check_near(tokens, y, kwrd[0])
+                                        if result[0] == True:
+                                            res = check_presence(tokens, kwrd[2])
+                                            if res[0] == True:
+                                                type_arr.append(k)
+                                                keyword.append(
+                                                    str(result[1]).replace('"', '').replace('[', '').replace(']',
+                                                                                                             '').replace(
+                                                        '\\', '').replace("'", "") + ' *' + kwrd[1] + '*' + str(
+                                                        res[1]).replace('"', '').replace('[', '').replace(']',
+                                                                                                          '').replace(
+                                                        '\\', '').replace("'", ""))
+                        y += 1
 
             if len(type_arr) > 0:
                 char = {i: type_arr.count(i) for i in type_arr};
                 char = list(char.keys())[0]
             else:
                 char = 'undef'
-
-            if char != 'undef' and char != 'skip':
-                try:
-                    for key, value in replace['general'].items():
-                        if key in new_text:
-                            if value is None:
-                                new_text = new_text.replace(key, '')
-                            else:
-                                new_text = new_text.replace(key, value)
-                        else:
-                            continue
-                except KeyError:
-                    pass
-
-                try:
-                    for key, value in replace[char].items():
-                        if key in new_text:
-                            if value is None:
-                                new_text = new_text.replace(key, '')
-                            else:
-                                new_text = new_text.replace(key, value)
-                        else:
-                            continue
-                except KeyError:
-                    pass
 
         item[1] = tokens
         item[2] = char
@@ -194,12 +197,6 @@ def mood_define(arr, char):
 
     neg = []
     pos = []
-    near_pos = []
-    near_neg = []
-    near_kw = []
-    presence_pos = []
-    presence_neg = []
-    presence_kw = []
     textcount = []
 
     path = './data/mood_keywords_' + char + '.yaml'
@@ -212,31 +209,12 @@ def mood_define(arr, char):
             neg = value
         elif key == 'positive':
             pos = value
-        elif key == 'near':
-            for item in value:
-                for k, v in item.items():
-                    if v != 'None':
-                        if k == 'negative':
-                            near_neg = v
-                        elif k == 'positive':
-                            near_pos = v
-                        elif k == 'near_kw':
-                            near_kw = v
-        elif key == 'presence':
-            for item in value:
-                for k, v in item.items():
-                    if v != 'None':
-                        if k == 'negative':
-                            presence_neg = v
-                        elif k == 'positive':
-                            presence_pos = v
-        elif key == 'presence_kw':
-            presence_kw = value
 
     for item in tqdm(arr):
         index = 0
         lemtext = item[1]
         sum_words = []
+        y = 0
 
         for i in lemtext:
             if len(i) > 2:
@@ -244,61 +222,70 @@ def mood_define(arr, char):
                     if not i.isdigit():
                         textcount.append(i)
                 for wrd in neg:
-                    simular = jarowinkler.jarowinkler_similarity(i, wrd)
-                    if simular >= 0.9:
-                        sum_words.append(i)
-                        index -= 1
-                for wrd in pos:
-                    simular = jarowinkler.jarowinkler_similarity(i, wrd)
-                    if simular >= 0.9:
-                        sum_words.append(i)
-                        index += 1
-                for wrd in near_neg:
-                    simular = jarowinkler.jarowinkler_similarity(i, wrd)
-                    if simular >= 0.9:
-                        if lemtext.index(i) > 1:
-                            if lemtext[lemtext.index(i) - 1] in near_kw:
-                                sum_words.append(lemtext[lemtext.index(i) - 1] + ' + ' + i)
+                    if wrd is not None:
+                        if wrd.isalpha() == True:                                       # Тональность определяется по одному слову
+                            simular = jarowinkler.jarowinkler_similarity(i, wrd)
+                            if simular >= 0.95:
+                                sum_words.append('*' + wrd + '*')
                                 index -= 1
-                        elif lemtext.index(i) > 2:
-                            if lemtext[lemtext.index(i) - 2] in near_kw:
-                                sum_words.append(lemtext[lemtext.index(i) - 2] + ' + ' + i)
-                                index -= 1
-                for wrd in near_pos:
-                    simular = jarowinkler.jarowinkler_similarity(i, wrd)
-                    if simular >= 0.9:
-                        if lemtext.index(i) > 1:
-                            if lemtext[lemtext.index(i) - 1] in near_kw:
-                                sum_words.append(lemtext[lemtext.index(i) - 1] + ' + ' + i)
-                                index += 1
-                        elif lemtext.index(i) > 2:
-                            if lemtext[lemtext.index(i) - 2] in near_kw:
-                                sum_words.append(lemtext[lemtext.index(i) - 2] + ' + ' + i)
-                                index += 1
-                for wrd in presence_kw:
-                    simular = jarowinkler.jarowinkler_similarity(i, wrd)
-                    if simular >= 0.9:
-                        if lemtext.index(i) > 1:
-                            if lemtext[lemtext.index(i) - 1] in near_kw:
-                                for word in presence_neg:
-                                    if word in lemtext:
-                                        sum_words.append(lemtext[lemtext.index(i) - 1] + ' + ' + i + ' + ' + word)
+                        else:
+                            kwrd = wrd.split('*')
+                            simular = jarowinkler.jarowinkler_similarity(i, kwrd[1])
+                            if simular >= 0.95:
+                                if len(kwrd[0]) > 0 and kwrd[0][0] != '_' and len(kwrd[2]) == 0:                  # Только near
+                                    result = check_near(lemtext, y, kwrd[0])
+                                    if result[0]== True:
+                                        sum_words.append(str(result[1]).replace('"','').replace('[','').replace(']','').replace('\\','').replace("'","") + ' *' + kwrd[1] + '*')
                                         index -= 1
-                                for word in presence_pos:
-                                    if word in lemtext:
-                                        sum_words.append(lemtext[lemtext.index(i) - 1] + ' + ' + i + ' + ' + word)
-                                        index += 1
-                        elif lemtext.index(i) > 2:
-                            if lemtext[lemtext.index(i) - 2] in near_kw:
-                                for word in presence_neg:
-                                    if word in lemtext:
-                                        sum_words.append(lemtext[lemtext.index(i) - 2] + ' + ' + i + ' + ' + word)
+                                elif len(kwrd[0]) == 0 or kwrd[0][0] == '_' and len(kwrd[2]) > 0:               # Только presence
+                                    res = check_presence(lemtext, kwrd[2])
+                                    if res[0]== True:
+                                        sum_words.append('*' + kwrd[1] + '*' + str(res[1]).replace('"','').replace('[','').replace(']','').replace('\\','').replace("'",""))
                                         index -= 1
-                                for word in presence_pos:
-                                    if word in lemtext:
-                                        sum_words.append(lemtext[lemtext.index(i) - 2] + ' + ' + i + ' + ' + word)
-                                        index += 1
+                                elif len(kwrd[0]) > 0 and kwrd[0][0] != '_' and len(kwrd[2]) > 0:                # Near & Presence
+                                    result = check_near(lemtext, y, kwrd[0])
+                                    if result[0]== True:
+                                        res = check_presence(lemtext, kwrd[2])
+                                        if res[0] == True:
+                                            sum_words.append(str(result[1]).replace('"','').replace('[','').replace(']','').replace('\\','').replace("'","") + ' *' + kwrd[1] + '*' + str(res[1]).replace('"','').replace('[','').replace(']','').replace('\\','').replace("'",""))
+                                            index -= 1
+                                        # else:
+                                        #     sum_words.append(str(result).replace('"','').replace('[','').replace(']','').replace('\\','') + ' *' + i + '*' + str(res[1]).replace('"','').replace('[','').replace(']','').replace('\\',''))
 
+                for wrd in pos:
+                    if wrd is not None:
+                        if wrd.isalpha() == True:  # Тональность определяется по одному слову
+                            simular = jarowinkler.jarowinkler_similarity(i, wrd)
+                            if simular >= 0.95:
+                                sum_words.append('*' + wrd + '*')
+                                index += 1
+                                continue
+                        else:
+                            kwrd = wrd.split('*')
+                            simular = jarowinkler.jarowinkler_similarity(i, kwrd[1])
+                            if simular >= 0.95:
+                                if len(kwrd[0]) > 0 and kwrd[0][0] != '_' and len(kwrd[2]) == 0:  # Только near
+                                    result = check_near(lemtext, y, kwrd[0])
+                                    if result[0]== True:
+                                        sum_words.append(str(result[1]).replace('"','').replace('[','').replace(']','').replace('\\','').replace("'","") + ' *' + kwrd[1] + '*')
+                                        index += 1
+                                elif len(kwrd[0]) == 0 or kwrd[0][0] == '_' and len(kwrd[2]) > 0:  # Только presence
+                                    res = check_presence(lemtext, kwrd[2])
+                                    if res[0]== True:
+                                        sum_words.append('*' + kwrd[1] + '*' + str(res[1]).replace('"','').replace('[','').replace(']','').replace('\\','').replace("'",""))
+                                        index += 1
+                                elif len(kwrd[0]) > 0 and kwrd[0][0] != '_' and len(kwrd[2]) > 0:  # Near & Presence
+                                    result = check_near(lemtext, y, kwrd[0])
+                                    if result[0]== True:
+                                        res = check_presence(lemtext, kwrd[2])
+                                        if res[0] == True:
+                                            sum_words.append(str(result[1]).replace('"','').replace('[','').replace(']','').replace('\\','').replace("'","") + ' *' + kwrd[1] + '*' + str(res[1]).replace('"','').replace('[','').replace(']','').replace('\\','').replace("'",""))
+                                            index += 1
+                                        # else:
+                                        #     sum_words.append(str(result).replace('"','').replace('[','').replace(']','').replace('\\','') + ' *' + i + '*' + str(
+                                        #         res[1]).replace('"','').replace('[','').replace(']','').replace('\\',''))
+
+            y += 1
         if index > 0:
             mood = 'positive'
         elif index < 0:
@@ -313,6 +300,140 @@ def mood_define(arr, char):
     fdist = FreqDist(textcount)
 
     return arr, fdist.most_common()
+
+
+def check_near (lemtext, i, keywords):
+    text = []
+    status = False
+
+    if keywords.find('+') >= 0 and keywords.find('-') >= 0:
+        if keywords.find('+') == 0:
+            plus = keywords[1:keywords.find('-')].split(',')
+            minus = keywords[keywords.find('-') + 1:].split(',')
+        else:
+            plus = keywords[keywords.find('-') + 1:].split(',')
+            minus = keywords[1:keywords.find('-')].split(',')
+
+        if i == 1:
+            if lemtext[i - 1] in plus:
+                text.append('+' + lemtext[i - 1] + ' -' + str(minus))
+                status = True
+        elif i > 2:
+            if lemtext[i - 1] in plus:
+                if lemtext[i - 2] not in minus:
+                    text.append('+' + lemtext[i - 1] + ' -' + str(minus))
+                    status = True
+            elif lemtext[i - 2] in plus:
+                if lemtext[i - 1] not in minus:
+                    text.append('+' + lemtext[i - 2] + ' -' + str(minus))
+                    status = True
+
+    elif keywords.find('+') >= 0 and keywords.find('-') < 0:
+        plus = keywords[1:].split(',')
+        if i == 1:
+            if lemtext[i - 1] in plus:
+                text.append('+' + lemtext[i - 1])
+                status = True
+        elif i >= 2:
+            if lemtext[i - 1] in plus:
+                text.append('+' + lemtext[i - 1])
+                status = True
+            elif lemtext[i - 2] in plus:
+                text.append('+' + lemtext[i - 2])
+                status = True
+
+    elif keywords.find('+') < 0 and keywords.find('-') >= 0:
+        minus = keywords[1:].split(',')
+        if i == 1:
+            if lemtext[i - 1] not in minus:
+                text.append('+' + lemtext[i - 1])
+                status = True
+        elif i >= 2:
+            if lemtext[i - 1] not in minus and lemtext[i - 2] not in minus:
+                text.append('-' + str(minus))
+                status = True
+
+    return status, text
+
+def check_presence (lemtext, keywords):
+    text = []
+    status = False
+
+    if keywords.find('+') >= 0 and keywords.find('-') >= 0:
+        if keywords.find('+') == 0:
+            plus = keywords[1:keywords.find('-')].split(',')
+            minus = keywords[keywords.find('-') + 1:].split(',')
+        else:
+            plus = keywords[keywords.find('-') + 1:].split(',')
+            minus = keywords[1:keywords.find('-')].split(',')
+
+        res = []
+        # res_min = []
+        for pl in plus:
+            for lem in lemtext:
+                simular = jarowinkler.jarowinkler_similarity(pl, lem)
+                if simular >= 0.95:
+                    for min in minus:
+                        for l in lemtext:
+                            simular = jarowinkler.jarowinkler_similarity(min, l)
+                            if simular >= 0.95:
+                                # res_min.append('-' + min)
+                                break
+                        else:
+                            res.append(' +' + pl + ' -' + str(minus))
+                            continue
+                        break
+
+        if len(set(res)) > 1:
+            unique = list(set(res))
+            status = True
+            text.append(unique)
+        elif len(set(res)) == 1:
+            status = True
+            text.append(res[0])
+        else:
+            # if len(set(res_min)) > 1:
+            #     unique = list(set(res_min))
+            #     text.append(unique)
+            # elif len(set(res_min)) == 1:
+            #     text.append(res_min)
+            # else:
+            text = []
+
+    elif keywords.find('+') >= 0 and keywords.find('-') < 0:
+        plus = keywords[1:].split(',')
+
+        for pl in plus:
+            for lem in lemtext:
+                simular = jarowinkler.jarowinkler_similarity(pl, lem)
+                if simular >= 0.95:
+                    text.append(' +' + pl)
+                    status = True
+
+    elif keywords.find('+') < 0 and keywords.find('-') >= 0:
+        minus = keywords[1:].split(',')
+        res = []
+        for min in minus:
+            for lem in lemtext:
+                simular = jarowinkler.jarowinkler_similarity(min, lem)
+                if simular >= 0.95:
+                    break
+            else:
+                res.append(' -' + str(minus))
+                continue
+            break
+
+        if len(set(res)) > 1:
+            unique = list(set(res))
+            status = True
+            text.append(unique)
+        elif len(set(res)) == 1:
+            status = True
+            text.append(res[0])
+        else:
+            text = []
+
+    return status, text
 
 
 if __name__ == '__main__':
