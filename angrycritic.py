@@ -20,11 +20,10 @@ def main():
     start_time = time.time()
     active_types = []
 
-
-    if os.path.exists('data.xlsx'):
+    if os.path.exists('1.xlsx'):
         print("Файл обнаружен. Начинаем обработку...")
 
-        df = pd.read_excel('data.xlsx', index_col=None, header=0)
+        df = pd.read_excel('1.xlsx', index_col=None, header=0)
         new_df = df.assign(Lemma='', Type='', Type_Keywords='', Mood='', Mood_Keywords='', Index='')
         arr = new_df.to_numpy()
 
@@ -140,10 +139,10 @@ def prepare(arr):
                                     type_arr.append(k)
                                     keyword.append(i)
                             else:
-                                kwrd = i.split('*')
+                                kwrd = i.split('_')
                                 simular = jarowinkler.jarowinkler_similarity(word, kwrd[1])
                                 if simular >= 0.9:
-                                    if len(kwrd[0]) > 0 and kwrd[0][0] != '_' and len(kwrd[2]) == 0:  # Только near
+                                    if len(kwrd[0]) > 0 and len(kwrd[2]) == 0:  # Только near
                                         result = check_near(tokens, y, kwrd[0])
                                         if result[0] == True:
                                             type_arr.append(k)
@@ -152,7 +151,7 @@ def prepare(arr):
                                                                                                          '').replace(
                                                     '\\', '').replace("'", "") + ' *' + kwrd[1] + '*')
 
-                                    elif len(kwrd[0]) == 0 or kwrd[0][0] == '_' and len(kwrd[2]) > 0:  # Только presence
+                                    elif len(kwrd[0]) == 0 and len(kwrd[2]) > 0:  # Только presence
                                         res = check_presence(tokens, kwrd[2])
                                         if res[0] == True:
 
@@ -160,7 +159,7 @@ def prepare(arr):
                                             keyword.append(
                                                 '*' + kwrd[1] + '*' + str(res[1]).replace('"', '').replace('[', '').replace(
                                                     ']', '').replace('\\', '').replace("'", ""))
-                                    elif len(kwrd[0]) > 0 and kwrd[0][0] != '_' and len(kwrd[2]) > 0:  # Near & Presence
+                                    elif len(kwrd[0]) > 0 and len(kwrd[2]) > 0:  # Near & Presence
                                         result = check_near(tokens, y, kwrd[0])
                                         if result[0] == True:
                                             res = check_presence(tokens, kwrd[2])
@@ -229,20 +228,20 @@ def mood_define(arr, char):
                                 sum_words.append('*' + wrd + '*')
                                 index -= 1
                         else:
-                            kwrd = wrd.split('*')
+                            kwrd = wrd.split('_')
                             simular = jarowinkler.jarowinkler_similarity(i, kwrd[1])
                             if simular >= 0.95:
-                                if len(kwrd[0]) > 0 and kwrd[0][0] != '_' and len(kwrd[2]) == 0:                  # Только near
+                                if len(kwrd[0]) > 0 and len(kwrd[2]) == 0:                  # Только near
                                     result = check_near(lemtext, y, kwrd[0])
                                     if result[0]== True:
                                         sum_words.append(str(result[1]).replace('"','').replace('[','').replace(']','').replace('\\','').replace("'","") + ' *' + kwrd[1] + '*')
                                         index -= 1
-                                elif len(kwrd[0]) == 0 or kwrd[0][0] == '_' and len(kwrd[2]) > 0:               # Только presence
+                                elif len(kwrd[0]) == 0 and len(kwrd[2]) > 0:               # Только presence
                                     res = check_presence(lemtext, kwrd[2])
                                     if res[0]== True:
                                         sum_words.append('*' + kwrd[1] + '*' + str(res[1]).replace('"','').replace('[','').replace(']','').replace('\\','').replace("'",""))
                                         index -= 1
-                                elif len(kwrd[0]) > 0 and kwrd[0][0] != '_' and len(kwrd[2]) > 0:                # Near & Presence
+                                elif len(kwrd[0]) > 0 and len(kwrd[2]) > 0:                # Near & Presence
                                     result = check_near(lemtext, y, kwrd[0])
                                     if result[0]== True:
                                         res = check_presence(lemtext, kwrd[2])
@@ -261,20 +260,20 @@ def mood_define(arr, char):
                                 index += 1
                                 continue
                         else:
-                            kwrd = wrd.split('*')
+                            kwrd = wrd.split('_')
                             simular = jarowinkler.jarowinkler_similarity(i, kwrd[1])
                             if simular >= 0.95:
-                                if len(kwrd[0]) > 0 and kwrd[0][0] != '_' and len(kwrd[2]) == 0:  # Только near
+                                if len(kwrd[0]) > 0 and len(kwrd[2]) == 0:  # Только near
                                     result = check_near(lemtext, y, kwrd[0])
                                     if result[0]== True:
                                         sum_words.append(str(result[1]).replace('"','').replace('[','').replace(']','').replace('\\','').replace("'","") + ' *' + kwrd[1] + '*')
                                         index += 1
-                                elif len(kwrd[0]) == 0 or kwrd[0][0] == '_' and len(kwrd[2]) > 0:  # Только presence
+                                elif len(kwrd[0]) == 0 and len(kwrd[2]) > 0:  # Только presence
                                     res = check_presence(lemtext, kwrd[2])
                                     if res[0]== True:
                                         sum_words.append('*' + kwrd[1] + '*' + str(res[1]).replace('"','').replace('[','').replace(']','').replace('\\','').replace("'",""))
                                         index += 1
-                                elif len(kwrd[0]) > 0 and kwrd[0][0] != '_' and len(kwrd[2]) > 0:  # Near & Presence
+                                elif len(kwrd[0]) > 0 and len(kwrd[2]) > 0:  # Near & Presence
                                     result = check_near(lemtext, y, kwrd[0])
                                     if result[0]== True:
                                         res = check_presence(lemtext, kwrd[2])
