@@ -20,10 +20,10 @@ def main():
     start_time = time.time()
     active_types = []
 
-    if os.path.exists('1.xlsx'):
+    if os.path.exists('data.xlsx'):
         print("Файл обнаружен. Начинаем обработку...")
 
-        df = pd.read_excel('1.xlsx', index_col=None, header=0)
+        df = pd.read_excel('data.xlsx', index_col=None, header=0)
         new_df = df.assign(Lemma='', Type='', Type_Keywords='', Mood='', Mood_Keywords='', Index='')
         arr = new_df.to_numpy()
 
